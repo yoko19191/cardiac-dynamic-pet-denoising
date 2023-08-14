@@ -9,9 +9,9 @@
 
 
 # dataset exclusive
-dataset/TracPETperf-D2-PhantomExperiments2
-dataset/denoised/*
-dataset/preprocessed/*
+dataset/*/
+dataset/*/*/
+dataset/*/*/*/
 
 !dataset/records.xlsx
 !dataset/please put patients data here.txt
