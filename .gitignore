@@ -1,0 +1,18 @@
+# pycharm
+.idea
+
+# local enviroment
+.env
+
+# python cache
+.ipynb_checkpoints/
+
+
+# dataset exclusive
+dataset/TracPETperf-D2-PhantomExperiments2
+dataset/denoised/*
+dataset/preprocessed/*
+
+!dataset/records.xlsx
+!dataset/please put patients data here.txt
+
