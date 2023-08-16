@@ -1,4 +1,6 @@
-# credit: https://github.com/wolny/pytorch-3dunet/tree/master/pytorch3dunet
+"""
+reference : https://github.com/wolny/pytorch-3dunet/tree/master/pytorch3dunet
+"""
 
 import importlib
 import random

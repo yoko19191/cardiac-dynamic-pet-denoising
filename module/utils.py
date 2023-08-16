@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 
@@ -417,3 +418,30 @@ def save_denoised_dicom(orginal_folder, denoised_data, output_folder):
             idx += 1
 
     print(f"Saved {total_files} denoised DICOM files.")
+
+
+
+def plot_image_with_zoom(image, zoom_coordinates, title=None, axis_off=False):
+    """
+    PARAM
+    - zoom_coordinates: (x, y, width, height)
+    """
+    x, y, width, height = zoom_coordinates
+    zoom_area = image[x:x + width, y:y + height]
+
+    # plot original image
+    plt.subplot(1, 2, 1)
+    plt.imshow(image, cmap='hot')
+    plt.title(title)
+    rect = Rectangle((y, x), height, width, linewidth=1, edgecolor='r', facecolor='none') # mark
+    plt.gca().add_patch(rect)
+    if axis_off:
+        plt.axis('off')
+
+    # plot zoom-in area
+    plt.subplot(1, 2, 2)
+    plt.imshow(zoom_area, cmap='hot')
+    if axis_off:
+        plt.axis('off')
+
+    plt.show()
