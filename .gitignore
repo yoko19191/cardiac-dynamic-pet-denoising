@@ -3,16 +3,20 @@
 
 # local enviroment
 .env
+.venv
 
 # python cache
 .ipynb_checkpoints/
 
 
 # dataset exclusive
-dataset/*/
-dataset/*/*/
-dataset/*/*/*/
+dataset/*
+!dataset/denoised/
+!dataset/preprocessed/
+!dataset/*.xlsx
+!dataset/*.csv
+!dataset/*.txt
 
-!dataset/records.xlsx
-!dataset/please put patients data here.txt
-
+# Ignore everything inside denoised and preprocessed folders
+dataset/denoised/*
+dataset/preprocessed/*

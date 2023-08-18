@@ -7,15 +7,14 @@ PET (Positron Emission Tomography) is an advanced cardiac imaging modality for s
 
 ## Installation
 
-python requirement:
-``python 3.11.4``
-
 ```
 git clone git@github.com:yoko19191/cardiac-dynamic-pet-denoising.git
 cd cardiac-dynamic-pet-denoising
+virtualenv .env --python=python3.11
+cd .env
+source /bin/activate 
 pip install -r requirements.txt
 ```
-
 
 ## Compared methods
 
@@ -26,6 +25,15 @@ pip install -r requirements.txt
 - [ ] Neighbor2Neighbor(Nb2Nb)
 - [ ] Zero-shot Noise2Noise(ZS-N2N)
 - [ ] Proposed ZS-N2N variant
+
+
+## Metrics
+
+- [Peak signal-to-noise ratio(PSNR)](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)
+- [Structural similarity(SSIM)](https://en.wikipedia.org/wiki/Structural_similarity)
+- [Blind/Referenceless Image Spatial Quality Evaluator (BRISQUE) ](https://archive.is/20201213161243/https://towardsdatascience.com/automatic-image-quality-assessment-in-python-391a6be52c11#selection-931.0-931.61)
+- Time-activity curve(TAC)
+
 
 
 ## Dataset
@@ -42,6 +50,8 @@ you may downlaod the example dataset [here](https://zenodo.org/record/6580182)
 PSNR
 
 SSIM
+
+BRISQUE
 
 TAC
 

@@ -1,4 +1,8 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import os
+import time
 import random
 import re
 import warnings
@@ -9,6 +13,7 @@ import torch
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 
@@ -22,68 +27,88 @@ from skimage import color, exposure, transform
 from skimage.util import img_as_ubyte
 from skimage.metrics import peak_signal_noise_ratio as cal_psnr
 from skimage.metrics import structural_similarity as cal_ssim
+from brisque import BRISQUE
 
-from tqdm.notebook import tqdm
+
+from tqdm import tqdm
+#from tqdm.notebook import tqdm
 
 def extract_number(filename):
-    """
-    extract number from filename
-    :param
-    - filename:
-    :return:
-    - sort key
-    """
     match = re.search(r'\d+', filename)
     return int(match.group()) if match else None
 
-
-def load_4d_dicom(patient_path):
+def timer_decorator(func):
     """
-    load a 4D DICOM files by AcquisitionTime
-    param:
-    - patient_path: patient directory
-    return:
-    - images : a 4D np array (time, depth, height, width)
+    A decorator to measure and print the execution time of a function.
+
+    This decorator wraps a given function and prints its execution time in seconds
+    after it's called. The original function's return value is passed through.
+
+    Args:
+        func (callable): The function to be wrapped.
+
+    Returns:
+        callable: The wrapped function.
+
+    Example:
+        @timer_decorator
+        def my_function():
+            # some code here
+
+        my_function()  # Prints the execution time of my_function
     """
-    dicom_files = [pydicom.dcmread(os.path.join(patient_path, f)) for f in os.listdir(patient_path) if f.endswith('.dcm')]
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        print(f"{func.__name__} running: {end_time - start_time} second")
+        return result
+    return wrapper
 
-    if not dicom_files:
-        raise ValueError(f"No DICOM files found in the specified directory: {patient_path}")
 
-    # metadata = []
-    for file in dicom_files:
-        if 'InstanceNumber' not in file:
-            raise ValueError(f"InstanceNumber is missing from DICOM file: {file.filename}")
-        if 'AcquisitionTime' not in file:
-            raise ValueError(f"AcquisitionTime is missing from DICOM file: {file.filename}")
-        if 'ImagePositionPatient' not in file:
-            raise ValueError(f"ImagePositionPatient is missing from DICOM file: {file.filename}")
-        # metadata.append(file)
+def seed_everything(seed=42):
+    """Set the seed for all random number generators to ensure reproducibility.
 
-    dicom_files.sort(
-        key=lambda x: (float(x.AcquisitionTime), int(x.InstanceNumber), [float(i) for i in x.ImagePositionPatient]))
+      This function sets the seeds for multiple random number generators, including
+      Python's built-in random module, NumPy, and PyTorch.
 
-    time_points = sorted(set(file.AcquisitionTime for file in dicom_files))
+      Args:
+          seed (int, optional): The seed value to set. Defaults to 0.
 
-    images = []
+      Prints:
+          A statement with the set seed value.
 
-    for time in time_points:
-        time_slice_files = [file for file in dicom_files if file.AcquisitionTime == time]
-        time_slices = []
+      Example:
+          >>> seed_everything(seed=42)
+      """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
-        for file in time_slice_files:
-            time_slices.append(file.pixel_array)
-
-        images.append(time_slices)
-
-    images = np.array(images)
-
-    return images
+    print(f"Every seed set to \"{seed}\"! ")
 
 def display_4d_image(images, min_intensity=None, max_intensity=None):
-    """display 4d images with interactive sliders
-    param:
-    - images: a 4D np array (time, depth, height, width)
+    """
+    Displays a 4D image along with its intensity distribution.
+
+    This function provides interactive sliders to navigate through time and slices, and adjust the window level and width.
+    It supports displaying images along the X, Y, or Z axis.
+
+    Args:
+        images (np.ndarray): A 4D numpy array containing the image data.
+        min_intensity (float, optional): The minimum intensity value for display. Defaults to the minimum value in the images.
+        max_intensity (float, optional): The maximum intensity value for display. Defaults to the maximum value in the images.
+
+    Raises:
+        ValueError: If the input is not a numpy array.
+
+    Note:
+        Requires ipywidgets for interactive.
     """
     if not isinstance(images, np.ndarray):
         raise ValueError('Input should be a numpy array')
@@ -149,6 +174,146 @@ def display_4d_image(images, min_intensity=None, max_intensity=None):
 
     display(widget)
 
+
+def display_image_in_detail(image, zoom_coordinates=(55, 15, 60, 60), title=None, axis_off=True):
+    """
+     Displays an image along with a zoomed-in area.
+
+     This function takes an image and coordinates for a zoomed-in area, and then displays both the original image and
+     the zoomed-in area side by side. The zoomed-in area is also marked with a red rectangle on the original image.
+
+     Args:
+         image (np.ndarray): A 2D numpy array containing the image data.
+         zoom_coordinates (tuple): A tuple containing the coordinates for the zoomed-in area (x, y, width, height).
+         title (str, optional): The title for the original image plot. Defaults to None.
+         axis_off (bool, optional): If True, turns off the axis. Defaults to False.
+     """
+    x, y, width, height = zoom_coordinates
+    zoom_area = image[x:x + width, y:y + height]
+
+    # plot original image
+    plt.subplot(1, 2, 1)
+    plt.imshow(image, cmap='hot')
+    plt.title(title)
+    rect = Rectangle((y, x), height, width, linewidth=1, edgecolor='r', facecolor='none') # mark
+    plt.gca().add_patch(rect)
+    if axis_off:
+        plt.axis('off')
+
+    # plot zoom-in area
+    plt.subplot(1, 2, 2)
+    plt.imshow(zoom_area, cmap='hot')
+    if axis_off:
+        plt.axis('off')
+
+    plt.show()
+
+@timer_decorator
+def calculate_metrics(denoised_data, noisy_data, data_range):
+    """Calculate various metrics between denoised and noisy data.
+
+       This function computes PSNR, SSIM, MAE, and BRISQUE for the provided denoised
+       and noisy data, which can be 2D, 3D, or 4D.
+
+       Args:
+           denoised_data (ndarray): The denoised image or volume data.
+           noisy_data (ndarray): The original noisy image or volume data.
+           data_range (float): The range of the data (e.g., 65535 for 16-bit images).
+
+       Returns:
+           tuple: Contains the PSNR, SSIM, MAE, and BRISQUE values for each volume and slice.
+
+       Raises:
+           AssertionError: If the denoised and noisy data are the same, or if they have different shapes.
+
+       Example:
+           >>> psnr_values, ssim_values, mae_values, brisque_values = calculate_metrics(denoised_image, noisy_image, 65535)
+       """
+    assert not np.array_equal(denoised_data, noisy_data), "Image pair must be different"
+    assert denoised_data.shape == noisy_data.shape, "Images must have the same shape"
+
+    # Expand input to 4D if necessary
+    if denoised_data.ndim == 2:
+        denoised_data = denoised_data.reshape(1, 1, *denoised_data.shape)
+        noisy_data = noisy_data.reshape(1, 1, *noisy_data.shape)
+    elif denoised_data.ndim == 3:
+        denoised_data = denoised_data.reshape(1, *denoised_data.shape)
+        noisy_data = noisy_data.reshape(1, *noisy_data.shape)
+
+    volumes, slices, height, width = denoised_data.shape
+    assert len(denoised_data.shape) == 4, "Images must be 4d"
+
+    psnr_values = np.zeros((volumes, slices))
+    ssim_values = np.zeros((volumes, slices))
+    mae_values = np.zeros((volumes, slices))
+    brisque = BRISQUE(url=False) # create brisque object
+    brisque_values = np.zeros((volumes, slices))
+    for vol_idx in range(volumes):
+        for slice_idx in range(slices):
+            denoised_image = denoised_data[vol_idx, slice_idx, :, :]
+            noisy_image = noisy_data[vol_idx, slice_idx, :, :]
+            # calculate PSNR
+            psnr_val = cal_psnr(denoised_image, noisy_image, data_range=data_range)
+            # calculate SSIM
+            ssim_val = cal_ssim(denoised_image, noisy_image, data_range=data_range)
+            # calculate MAE
+            mae_val = np.mean(np.abs(denoised_image - noisy_image))
+            # calculate BRISQUE
+            fake_rgb_denoised_image = np.stack([0.2125 * denoised_image, 0.7154 * denoised_image, 0.0721 * denoised_image], axis=2)
+            brisque_val = brisque.score(fake_rgb_denoised_image)
+            if np.isnan(psnr_val) or np.isnan(ssim_val):
+                warnings.warn("Encountered NaN value for PSNR or SSIM. Skipping frame.")
+                continue
+
+            psnr_values[vol_idx, slice_idx] = psnr_val
+            ssim_values[vol_idx, slice_idx] = ssim_val
+            mae_values[vol_idx, slice_idx] = mae_val
+            brisque_values[vol_idx, slice_idx] = brisque_val
+            
+    return psnr_values, ssim_values, mae_values, brisque_values
+
+# @timer_decorator
+# def calculate_metrics(denoised_data, noisy_data, data_range):
+#     assert not np.array_equal(denoised_data, noisy_data), "Image pair must be different"
+#     assert denoised_data.shape == noisy_data.shape, "Images must have the same shape"
+
+#     # Expand input to 4D if necessary
+#     if denoised_data.ndim == 2:
+#         denoised_data = denoised_data.reshape(1, 1, *denoised_data.shape)
+#         noisy_data = noisy_data.reshape(1, 1, *noisy_data.shape)
+#     elif denoised_data.ndim == 3:
+#         denoised_data = denoised_data.reshape(1, *denoised_data.shape)
+#         noisy_data = noisy_data.reshape(1, *noisy_data.shape)
+
+#     volumes, slices, height, width = denoised_data.shape
+#     assert len(denoised_data.shape) == 4, "Images must be 4d"
+
+#     psnr_values = np.zeros((volumes, slices))
+#     ssim_values = np.zeros((volumes, slices))
+#     mae_values = np.zeros((volumes, slices))
+
+#     for vol_idx in range(volumes):
+#         for slice_idx in range(slices):
+#             denoised_image = denoised_data[vol_idx, slice_idx, :, :]
+#             noisy_image = noisy_data[vol_idx, slice_idx, :, :]
+#             psnr_val = cal_psnr(denoised_image, noisy_image, data_range=data_range)
+#             ssim_val = cal_ssim(denoised_image, noisy_image, data_range=data_range)
+#             mae_val = np.mean(np.abs(denoised_image - noisy_image))
+
+#             if np.isnan(psnr_val) or np.isnan(ssim_val):
+#                 warnings.warn("Encountered NaN value for PSNR or SSIM. Skipping frame.")
+#                 continue
+
+#             psnr_values[vol_idx, slice_idx] = psnr_val
+#             ssim_values[vol_idx, slice_idx] = ssim_val
+#             mae_values[vol_idx, slice_idx] = mae_val
+
+#     return psnr_values, ssim_values, mae_values
+
+
+
+
+####################################################
 
 def add_noise_to_tensor(x, noise_type, noise_level):
     """
@@ -317,27 +482,6 @@ def make_hist_equalize(image, method='cdf', **kwargs):
     return image_eqz
 
 
-def compute_psnr_ssim_from_4d_ndarray(clean_4d, noisy_4d, data_range=None):
-    all_time_psnr, all_time_ssim = [], []
-    for time_frame in zip(clean_4d, noisy_4d):
-        clean_time, noisy_time = time_frame
-        all_depth_psnr, all_depth_ssim = [], []
-        for depth_frame in zip(clean_time, noisy_time):
-            clean_depth, noisy_depth = depth_frame
-            psnr_val = cal_psnr(clean_depth, noisy_depth, data_range=data_range)
-            ssim_val = cal_ssim(clean_depth, noisy_depth, data_range=data_range)
-            if np.isnan(psnr_val) or np.isnan(ssim_val):
-                warnings.warn(f"Encountered NaN value for PSNR or SSIM. Skipping frame({time_frame},{depth_frame}).")
-                continue
-
-            all_depth_psnr.append(psnr_val)
-            all_depth_ssim.append(ssim_val)
-
-        all_time_psnr.append(all_depth_psnr)
-        all_time_ssim.append(all_depth_ssim)
-
-    return np.array(all_time_psnr), np.array(all_time_ssim)
-
 
 def plot_2d_data(data_2d, title):
     """
@@ -367,81 +511,7 @@ def plot_2d_data(data_2d, title):
 
 
 
-def seed_everything(seed=0):
-    """
-    set certain seed in random, numpy, and pytorch
-    :param seed:
-    :return:
-    """
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-    print(f"Every seed set to \"{seed}\"! ")
-
-
-def save_denoised_dicom(orginal_folder, denoised_data, output_folder):
-    """
-    save ndarray in dicom file and keep all meta attribute the same
-    :param orginal_folder:
-    :param denoised_data:
-    :param output_folder:
-    :return:
-    """
-    dicom_files = [pydicom.dcmread(os.path.join(orginal_folder, f)) for f in os.listdir(orginal_folder) if f.endswith('.dcm')]
-
-    dicom_files.sort(
-        key=lambda x: (float(x.AcquisitionTime), int(x.InstanceNumber), [float(i) for i in x.ImagePositionPatient]))
-
-    os.makedirs(output_folder, exist_ok=True)
-    time_points = sorted(set(file.AcquisitionTime for file in dicom_files))
-
-    idx = 0
-    total_files = len(dicom_files)
-
-    for t, time in enumerate(tqdm(time_points, desc="Processing time points")):
-        time_slice_files = [file for file in dicom_files if file.AcquisitionTime == time]
-
-        for d, file in enumerate(time_slice_files):
-            # create new dicom file from original one
-            new_dicom = pydicom.dcmread(file.filename) # makesure all meta information the same
-            # only update pixel data
-            new_dicom.PixelData = denoised_data[t, d].tobytes()
-            original_filename = os.path.basename(file.filename)
-            new_file_path = os.path.join(output_folder, original_filename)
-            new_dicom.save_as(new_file_path)
-            idx += 1
-
-    print(f"Saved {total_files} denoised DICOM files.")
 
 
 
-def plot_image_with_zoom(image, zoom_coordinates, title=None, axis_off=False):
-    """
-    PARAM
-    - zoom_coordinates: (x, y, width, height)
-    """
-    x, y, width, height = zoom_coordinates
-    zoom_area = image[x:x + width, y:y + height]
 
-    # plot original image
-    plt.subplot(1, 2, 1)
-    plt.imshow(image, cmap='hot')
-    plt.title(title)
-    rect = Rectangle((y, x), height, width, linewidth=1, edgecolor='r', facecolor='none') # mark
-    plt.gca().add_patch(rect)
-    if axis_off:
-        plt.axis('off')
-
-    # plot zoom-in area
-    plt.subplot(1, 2, 2)
-    plt.imshow(zoom_area, cmap='hot')
-    if axis_off:
-        plt.axis('off')
-
-    plt.show()

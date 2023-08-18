@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 reference : https://github.com/wolny/pytorch-3dunet/tree/master/pytorch3dunet
 """
@@ -14,6 +17,7 @@ from skimage.segmentation import find_boundaries
 
 # WARN: use fixed random state for reproducibility; if you want to randomize on each run seed with `time.time()` e.g.
 GLOBAL_RANDOM_STATE = np.random.RandomState(47)
+
 
 class Compose(object):
     def __init__(self, transforms):
