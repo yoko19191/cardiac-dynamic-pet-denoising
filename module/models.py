@@ -58,6 +58,13 @@ class DnCNN(nn.Module):
 
 
 class AttentionModule(nn.Module):
+    """
+        Attention module to provide self-attention within a channel dimension.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+    """
     def __init__(self, in_channels, out_channels):
         super(AttentionModule, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
@@ -71,10 +78,18 @@ class AttentionModule(nn.Module):
         out = torch.matmul(attn, k)
         return out + x
 
-
+    
 class UNetBlock(nn.Module):
+    """
+    Basic UNet block comprising two convolutional layers with batch normalization and ReLU activation.
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+    """
     def __init__(self, in_channels, out_channels):
         super(UNetBlock, self).__init__()
+        self.in_channels = in_channels
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
@@ -104,10 +119,19 @@ class UNetBlock(nn.Module):
         return out
 
 
-class UNet2D(nn.Module):
+class UNet2_5D(nn.Module):
+    """
+         2.5D UNet architecture with self-attention at the bottleneck.
+        Takes three consecutive slices (top, middle, bottom) as input and predicts the middle slice.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels (usually number of classes).
+    """
     def __init__(self, in_channels, out_channels):
-        super(UNet, self).__init__()
-        self.encoder1 = UNetBlock(in_channels, 64)
+        super(UNet2_5D, self).__init__()
+        # Multiply in_channels by 3 as there are 3 slices: top, middle, bottom
+        self.encoder1 = UNetBlock(in_channels * 3, 64)
         self.pool1 = nn.MaxPool2d(2)
         self.encoder2 = UNetBlock(64, 128)
         self.pool2 = nn.MaxPool2d(2)
@@ -135,7 +159,20 @@ class UNet2D(nn.Module):
         self.decoder1 = UNetBlock(128, 64)
         self.conv_final = nn.Conv2d(64, out_channels, kernel_size=1)
 
-    def forward(self, x):
+    def forward(self, x_top, x_middle, x_bottom):
+        """
+        Forward pass for the 2.5D UNet.
+
+        Args:
+            x_top (torch.Tensor): Input tensor for the top slice (batch_size, in_channels, height, width).
+            x_middle (torch.Tensor): Input tensor for the middle slice (batch_size, in_channels, height, width).
+            x_bottom (torch.Tensor): Input tensor for the bottom slice (batch_size, in_channels, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor for the middle slice (batch_size, out_channels, height, width).
+        """
+         # Concatenate the channels from the top, middle, and bottom slices
+        x = torch.cat([x_top, x_middle, x_bottom], dim=1)
         enc1 = self.encoder1(x)
         enc2 = self.encoder2(self.pool1(enc1))
         enc3 = self.encoder3(self.pool2(enc2))
@@ -149,7 +186,6 @@ class UNet2D(nn.Module):
         dec1 = self.decoder1(torch.cat([enc1, self.up1(dec2)], 1))
         final = self.conv_final(dec1)
         return final
-
 
 
 

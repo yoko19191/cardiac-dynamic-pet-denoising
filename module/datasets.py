@@ -7,6 +7,10 @@ import pydicom
 from tqdm import tqdm
 # from tqdm.notebook import tqdm
 
+
+import torch 
+from torch.utils.data import Dataset
+
 def load_4d_dicom(patient_path):
     """
         Loads 4D DICOM images from the specified patient directory.
@@ -106,3 +110,36 @@ def save_4d_dicom(dicom_folder, ndarray_4d, output_folder):
     print(f"Saved {total_files} denoised DICOM files.")
 
 
+class Mask2_5Dataset(Dataset):
+    def __init__(self, noisy_data, apply_mask=True, n_mask = 1):
+        self.noisy_data = noisy_data
+        self.apply_mask = apply_mask
+        self.n_mask = n_mask
+
+    def __len__(self):
+        return self.noisy_data.shape[0] * (self.noisy_data.shape[2] - 2)
+
+    def __getitem__(self, idx):
+        time_idx = idx // (self.noisy_data.shape[2] - 2)
+        depth_idx = idx % (self.noisy_data.shape[2] - 2)
+        x_top = self.noisy_data[time_idx, :, depth_idx]
+        x_middle = self.noisy_data[time_idx, :, depth_idx + 1]
+        x_bottom = self.noisy_data[time_idx, :, depth_idx + 2]
+
+        if self.apply_mask:
+            x_middle, mask_middle = self.mask(x_middle)
+            return x_top, x_middle, x_bottom, mask_middle
+        else:
+            return x_top, x_middle, x_bottom
+
+    def mask(self, x):
+        n = self.n_mask  # Number of pixels to mask
+        mask_middle = torch.ones_like(x)  # Initialize the mask
+        x_noised = x.clone()  # Create a copy for the noised data
+        random_idx = torch.randint(0, x.numel(), (n,))  # Random indexing for tensors
+        mask_middle.view(-1)[random_idx] = 0
+        #x_noised.view(-1)[random_idx] = torch.normal(mean=0, std=1, size=(n,))  # or any noise you want to introduce
+        x_noised.view(-1)[random_idx] = 0
+        return x_noised, mask_middle
+    
+    
