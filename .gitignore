@@ -21,3 +21,8 @@ dataset/*
 # Ignore everything inside denoised and preprocessed folders
 dataset/denoised/*
 dataset/preprocessed/*
+
+
+# Ignore checkpoints
+check_points/*
+!check_points/*.sh
