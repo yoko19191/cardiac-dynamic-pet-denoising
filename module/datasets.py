@@ -142,4 +142,22 @@ class Mask2_5Dataset(Dataset):
         x_noised.view(-1)[random_idx] = 0
         return x_noised, mask_middle
     
+
+def restore_data(normalized_data, restore_info):
     
+    original_min = restore_info["original_min"]
+    original_max = restore_info["original_max"]
+    z_score_mean = restore_info["z_score_mean"]
+    z_score_std_dev = restore_info["z_score_std_dev"]
+    noise_min = restore_info["noise_min"]
+    noise_max = restore_info["noise_max"]
+
+    denormalized_data = normalized_data * (noise_max - noise_min) + noise_min
+
+    # un z-score
+    un_z_scored_data = denormalized_data * z_score_std_dev + z_score_mean
+
+    # restore range 
+    restored_data = np.clip(un_z_scored_data, original_min, original_max).astype(np.int16)
+
+    return restored_data
