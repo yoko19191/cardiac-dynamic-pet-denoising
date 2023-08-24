@@ -14,7 +14,7 @@ __pycache__/
 dataset/*
 !dataset/denoised/
 !dataset/preprocessed/
-!dataset/*.xlsx
+!dataset/records.xlsx
 !dataset/*.csv
 !dataset/*.txt
 
