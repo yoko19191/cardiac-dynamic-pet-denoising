@@ -110,38 +110,80 @@ def save_4d_dicom(dicom_folder, ndarray_4d, output_folder):
     print(f"Saved {total_files} denoised DICOM files.")
 
 
-class Mask2_5Dataset(Dataset):
-    def __init__(self, noisy_data, apply_mask=True, n_mask = 1):
-        self.noisy_data = noisy_data
-        self.apply_mask = apply_mask
-        self.n_mask = n_mask
+# class Mask2_5Dataset(Dataset):
+#     def __init__(self, noisy_data, apply_mask=True, n_mask = 1):
+#         self.noisy_data = noisy_data
+#         self.apply_mask = apply_mask
+#         self.n_mask = n_mask
 
-    def __len__(self):
-        return self.noisy_data.shape[0] * (self.noisy_data.shape[2] - 2)
+#     def __len__(self):
+#         return self.noisy_data.shape[0] * (self.noisy_data.shape[2] - 2)
 
-    def __getitem__(self, idx):
-        time_idx = idx // (self.noisy_data.shape[2] - 2)
-        depth_idx = idx % (self.noisy_data.shape[2] - 2)
-        x_top = self.noisy_data[time_idx, :, depth_idx]
-        x_middle = self.noisy_data[time_idx, :, depth_idx + 1]
-        x_bottom = self.noisy_data[time_idx, :, depth_idx + 2]
+#     def __getitem__(self, idx):
+#         time_idx = idx // (self.noisy_data.shape[2] - 2)
+#         depth_idx = idx % (self.noisy_data.shape[2] - 2)
+#         x_top = self.noisy_data[time_idx, :, depth_idx]
+#         x_middle = self.noisy_data[time_idx, :, depth_idx + 1]
+#         x_bottom = self.noisy_data[time_idx, :, depth_idx + 2]
 
-        if self.apply_mask:
-            x_middle, mask_middle = self.mask(x_middle)
-            return x_top, x_middle, x_bottom, mask_middle
-        else:
-            return x_top, x_middle, x_bottom
+#         if self.apply_mask:
+#             x_middle, mask_middle = self.mask(x_middle)
+#             return x_top, x_middle, x_bottom, mask_middle
+#         else:
+#             return x_top, x_middle, x_bottom
 
-    def mask(self, x):
-        n = self.n_mask  # Number of pixels to mask
-        mask_middle = torch.ones_like(x)  # Initialize the mask
-        x_noised = x.clone()  # Create a copy for the noised data
-        random_idx = torch.randint(0, x.numel(), (n,))  # Random indexing for tensors
-        mask_middle.view(-1)[random_idx] = 0
-        #x_noised.view(-1)[random_idx] = torch.normal(mean=0, std=1, size=(n,))  # or any noise you want to introduce
-        x_noised.view(-1)[random_idx] = 0
-        return x_noised, mask_middle
+#     def mask(self, x):
+#         n = self.n_mask  # Number of pixels to mask
+#         mask_middle = torch.ones_like(x)  # Initialize the mask
+#         x_noised = x.clone()  # Create a copy for the noised data
+#         random_idx = torch.randint(0, x.numel(), (n,))  # Random indexing for tensors
+#         mask_middle.view(-1)[random_idx] = 0
+#         #x_noised.view(-1)[random_idx] = torch.normal(mean=0, std=1, size=(n,))  # or any noise you want to introduce
+#         x_noised.view(-1)[random_idx] = 0
+#         return x_noised, mask_middle
+
+# class Mask2_5Dataset(Dataset):
+#     """A dataset class for blind-spot network.
+
+#     Args:
+#         noisy_tensor (Tensor): Input tensor of shape (batch, time, channel, depth, height, width).
+#         apply_mask (bool): Whether to apply the mask.
+#         n_mask (int): Number of pixels to mask.
+#    """
+#     def __init__(self, noisy_tensor, apply_mask=True, n_mask=1):
+#         self.noisy_tensor = noisy_tensor
+#         self.apply_mask = apply_mask
+#         self.n_mask = n_mask
+
+#     def __len__(self):
+#         # batch shape : (batch * time * (three successive depth_slices))
+#         return self.noisy_tensor.shape[0] * self.noisy_tensor.shape[1] * (self.noisy_tensor.shape[3] - 2)
     
+#     def __getitem__(self, idx):
+#         batch_idx = idx // (self.noisy_tensor.shape[1] * (self.noisy_tensor.shape[3] - 2))
+#         time_idx = (idx // (self.noisy_tensor.shape[3] - 2)) % self.noisy_tensor.shape[1]
+#         depth_idx = idx % (self.noisy_tensor.shape[3] - 2)
+
+#         x_top = self.noisy_tensor[batch_idx, time_idx, :, depth_idx, :, :]
+#         x_middle = self.noisy_tensor[batch_idx, time_idx, :, depth_idx + 1, :, :]
+#         x_bottom = self.noisy_tensor[batch_idx, time_idx, :, depth_idx + 2, :, :]
+
+#         if self.apply_mask:
+#             x_middle, mask_middle = self.mask(x_middle)
+#             return x_top, x_middle, x_bottom, mask_middle
+#         else:
+#             return x_top, x_middle, x_bottom
+
+#     def mask(self, x):
+#         n = self.n_mask  # Number of pixels to mask
+#         mask_middle = torch.ones_like(x)  # Initialize the mask
+#         x_noised = x.clone()  # Create a copy for the noised data
+#         random_idx = torch.randint(0, x.numel(), (n,))  # Random indexing for tensors
+#         mask_middle.view(-1)[random_idx] = 0
+#         #x_noised.view(-1)[random_idx] = torch.normal(mean=0, std=1, size=(n,))  # or any noise you want to introduce
+#         x_noised.view(-1)[random_idx] = 0
+#         return x_noised, mask_middle
+
 
 def restore_data(normalized_data, restore_info):
     
@@ -161,3 +203,52 @@ def restore_data(normalized_data, restore_info):
     restored_data = np.clip(un_z_scored_data, original_min, original_max).astype(np.int16)
 
     return restored_data
+
+
+class MaskDataset(Dataset):
+    """ 
+    Dataset for Blind-spot network
+    Args:
+    - data_tensor : the input tensor with dimensions(patience, time, channel, depth, height, width)
+    - num_mask : the number of pixel to mask middle slice. Default is 1
+    """
+    def __init__(self, data_tensor, num_mask=1):
+        self.data_tensor = data_tensor
+        self.num_mask = num_mask
+        assert len(data_tensor.shape) == 6, "noisy_tensor should have 6 dimensions (patience, time, channel, depth, height, width)"
+        assert self.data_tensor.size(3) >= 3, "Depth should be at least 3 for 2.5D slices."
+        
+        self.p = data_tensor.shape[0] # number of patiences
+        self.t = data_tensor.shape[1] # number of time frame
+        self.d = data_tensor.shape[3] - 2 # number of contines slices
+        
+    def __len__(self):
+        return self.p * self.t * self.d # number of continues three slices
+    
+    def __getitem__(self, idx):
+        patience_idx = idx // (self.t * self.d)
+        time_idx = (idx % (self.t * self.d)) // self.d
+        depth_idx = idx % self.d + 1  # We add 1 to start from the second slice (for the middle slice)
+
+        # Extract the slices
+        top_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx-1, :, :]
+        middle_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :].clone()  # We use clone() to avoid in-place modifications
+        bottom_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx+1, :, :]
+        
+        # create mask position(s)
+        mask_middle = middle_slice.clone()
+        H, W = middle_slice.shape[-2], middle_slice.shape[-1]
+        device = middle_slice.device
+        random_h_indices = torch.randint(high=H, size=(self.num_mask,)).to(device)
+        random_w_indices = torch.randint(high=W, size=(self.num_mask,)).to(device)
+
+        # Generate gaussian noise as mask
+        noise = torch.randn_like(mask_middle).to(device)
+        for i in range(self.num_mask):
+            mask_middle[:, random_h_indices[i], random_w_indices[i]] += noise[:, random_h_indices[i], random_w_indices[i]]
+            
+        # Clip the values to ensure they remain in the original range
+        min_val, max_val = torch.min(middle_slice), torch.max(middle_slice)
+        mask_middle = torch.clamp(mask_middle, min_val, max_val)
+        
+        return top_slice, mask_middle, bottom_slice, middle_slice

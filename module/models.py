@@ -35,7 +35,7 @@ class CNN(nn.Module):
 
 class DnCNN(nn.Module):
     """
-        Implementation of DnCNN
+        Implementation of 2D DnCNN
     """
     def __init__(self, channels, num_of_layers=17):
         super(DnCNN, self).__init__()
@@ -131,7 +131,8 @@ class UNet2_5D(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UNet2_5D, self).__init__()
         # Multiply in_channels by 3 as there are 3 slices: top, middle, bottom
-        self.encoder1 = UNetBlock(in_channels * 3, 64)
+        #self.encoder1 = UNetBlock(in_channels * 3, 64)
+        self.encoder1 = UNetBlock(in_channels, 64)
         self.pool1 = nn.MaxPool2d(2)
         self.encoder2 = UNetBlock(64, 128)
         self.pool2 = nn.MaxPool2d(2)

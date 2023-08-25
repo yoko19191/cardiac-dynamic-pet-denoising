@@ -18,7 +18,6 @@ pip install -r requirements.txt
 ## Compared methods
 
 - [X] Block-Matching and 4D filtering
-- [ ] Deep Image Prior(DIP)
 - [ ] Noise2Void(N2V)
 - [ ] Noise-As-Clean(NAC)
 - [ ] Neighbor2Neighbor(Nb2Nb)
