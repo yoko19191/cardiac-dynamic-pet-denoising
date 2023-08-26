@@ -243,12 +243,25 @@ class MaskDataset(Dataset):
         random_w_indices = torch.randint(high=W, size=(self.num_mask,)).to(device)
 
         # Generate gaussian noise as mask
-        noise = torch.randn_like(mask_middle).to(device)
-        for i in range(self.num_mask):
-            mask_middle[:, random_h_indices[i], random_w_indices[i]] += noise[:, random_h_indices[i], random_w_indices[i]]
+#         noise = torch.randn_like(mask_middle).to(device)
+#         for i in range(self.num_mask):
+#             mask_middle[:, random_h_indices[i], random_w_indices[i]] += noise[:, random_h_indices[i], random_w_indices[i]]
             
-        # Clip the values to ensure they remain in the original range
+#         # Clip the values to ensure they remain in the original range
+#         min_val, max_val = torch.min(middle_slice), torch.max(middle_slice)
+#         mask_middle = torch.clamp(mask_middle, min_val, max_val)
+        
+        #
         min_val, max_val = torch.min(middle_slice), torch.max(middle_slice)
-        mask_middle = torch.clamp(mask_middle, min_val, max_val)
+        noise_range = 1.00 * (max_val - min_val)
+        for i in range(self.num_mask):
+            # Generate a single noise value for each channel
+            #noise_value = torch.randn(size=(mask_middle.shape[0],)).to(device) * noise_range
+            #noise_value = torch.clamp(noise_value, -noise_range, noise_range)  # Ensure the noise is within the range
+            noise_value = max_val
+            # Add the noise to the specific location in mask_middle
+            mask_middle[:, random_h_indices[i], random_w_indices[i]] += noise_value
+
+        
         
         return top_slice, mask_middle, bottom_slice, middle_slice

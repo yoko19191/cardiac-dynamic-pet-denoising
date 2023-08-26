@@ -94,7 +94,8 @@ class UNetBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
+        #self.relu = nn.ReLU(inplace=True)
+        self.leaky_relu = nn.LeakyReLU(inplace=True)
 
         # if not in_channel == out_channel, using 1x1 conv2d to fix
         if in_channels != out_channels:
@@ -106,7 +107,8 @@ class UNetBlock(nn.Module):
         residual = x
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        #out = self.relu(out)
+        out = self.leaky_relu(out)
         out = self.conv2(out)
         out = self.bn2(out)
 
@@ -115,7 +117,8 @@ class UNetBlock(nn.Module):
             residual = self.match_channels(x)
 
         out += residual
-        out = self.relu(out)
+        #out = self.relu(out)
+        out = self.leaky_relu(out)
         return out
 
 
