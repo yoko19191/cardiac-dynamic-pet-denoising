@@ -265,3 +265,33 @@ class MaskDataset(Dataset):
         
         
         return top_slice, mask_middle, bottom_slice, middle_slice
+    
+    
+class NACDataset(Dataset):
+    def __init__(self, data_tensor):
+        self.data_tensor = data_tensor
+        assert len(data_tensor.shape) == 6, "noisy_tensor should have 6 dimensions (patience, time, channel, depth, height, width)"
+        assert self.data_tensor.size(3) >= 3, "Depth should be at least 3 for 2.5D slices."
+        
+        self.p = data_tensor.shape[0] # number of patiences
+        self.t = data_tensor.shape[1] # number of time frame
+        self.d = data_tensor.shape[3] - 2 # number of contines slices
+        
+    def __len__(self):
+        return self.p * self.t * self.d # number of continues three slices
+        
+    def __getitem__(self, idx):
+        patience_idx = idx // (self.t * self.d)
+        time_idx = (idx % (self.t * self.d)) // self.d
+        depth_idx = idx % self.d + 1  # We add 1 to start from the second slice (for the middle slice)
+
+        # Extract the slices
+        top_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx-1, :, :]
+        middle_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :] 
+        bottom_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx+1, :, :]
+        middle_target = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :].clone() # noisy middle slice as clean 
+        
+        return top_slice, middle_slice, bottom_slice, middle_target
+
+        
+    
