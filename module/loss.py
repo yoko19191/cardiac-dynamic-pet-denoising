@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+import math
+
 class SSIMLoss(torch.nn.Module):
     def __init__(self, window_size=11, size_average=True):
         super(SSIMLoss, self).__init__()
@@ -50,7 +52,7 @@ class SSIMLoss(torch.nn.Module):
 
     def create_window(self, window_size, channel):
         def gaussian(window_size, sigma):
-            gauss = torch.Tensor([exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
+            gauss = torch.Tensor([math.exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
             return gauss / gauss.sum()
 
         _1D_window = gaussian(window_size, 1.5).unsqueeze(1)
