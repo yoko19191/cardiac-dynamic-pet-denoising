@@ -285,10 +285,32 @@ class NACDataset(Dataset):
         noise_level = mad / 0.6745
         return torch.mean(noise_level)
 
-    def mae_estimate(self, image_tensor):
-        lambda_estimate = torch.mean(image_tensor)
-        std_estimate = torch.sqrt(lambda_estimate)
-        return std_estimate
+    # def mae_estimate(self, image_tensor):
+    #     lambda_estimate = torch.mean(image_tensor)
+    #     std_estimate = torch.sqrt(lambda_estimate)
+    #     return std_estimate
+    
+    def anscombe_estimate(image_tensor, window_size=7):
+        def anscombe(x):
+            return 2 * torch.sqrt(x + 3 / 8)
+
+        def inv_anscombe(y):
+            return (y / 2) ** 2 - 3 / 8
+        
+        # Reshape tensor to match expected input shape for F.avg_pool2d
+        c, h, w = image_tensor.shape
+        reshaped_tensor = image_tensor.view(c, 1, h, w)
+        
+        # Calculate local mean using average pooling
+        local_mean = F.avg_pool2d(reshaped_tensor, window_size, stride=1, padding=window_size // 2)
+        
+        # Calculate local variance
+        local_var = F.avg_pool2d(reshaped_tensor ** 2, window_size, stride=1, padding=window_size // 2) - local_mean ** 2
+        
+        # Calculate average std
+        noise_std = torch.sqrt(F.relu(local_var)).mean()
+        
+        return noise_std
 
     def __len__(self):
         return self.p * self.t * self.d  # number of continuous three slices
@@ -313,7 +335,8 @@ class NACDataset(Dataset):
                 estimate_std = self.mad_estimate(concatenated_slices)
                 simulated_noise = torch.normal(mean=0., std=estimate_std, size=noise_shape).to(middle_slice.device)  # Move noise to the same device
             elif self.noise_type == 'poisson':
-                estimate_std = self.mae_estimate(concatenated_slices)
+                # estimate_std = self.mae_estimate(concatenated_slices)
+                estimate_std = anscombe_estimate(concatenated_slices)
                 simulated_noise = torch.poisson(estimate_std * torch.ones_like(middle_slice)).to(middle_slice.device) - estimate_std
             else:
                 raise ValueError("Invalid noise_type. Choose either 'gaussian' or 'poisson'.")
