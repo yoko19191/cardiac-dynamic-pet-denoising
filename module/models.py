@@ -3,7 +3,8 @@
 
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
+import torchvision.models as models
 
 
 
@@ -191,108 +192,116 @@ class UNet2_5D(nn.Module):
         final = self.conv_final(dec1)
         return final
 
+    
+
+###### ResNet-34 U-Net #########
+
+
+class ResNet34_UNet(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ResNet34_UNet, self).__init__()
+        
+        # Load pre-trained ResNet34 model + higher level features
+        resnet34 = models.resnet34(pretrained=True)
+        
+        # Encoder layers
+        self.enc1 = nn.Sequential(*list(resnet34.children())[:3])
+        self.enc2 = nn.Sequential(*list(resnet34.children())[4])
+        self.enc3 = nn.Sequential(*list(resnet34.children())[5])
+        self.enc4 = nn.Sequential(*list(resnet34.children())[6])
+        self.enc5 = nn.Sequential(*list(resnet34.children())[7])
+        
+        self.center = nn.Sequential(
+            UNetBlock(512, 1024),
+            AttentionModule(1024, 1024)
+        )
+
+        # Decoder layers
+        self.up5 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
+        self.dec5 = UNetBlock(1024, 512)
+        self.up4 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.dec4 = UNetBlock(512, 256)
+        self.up3 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec3 = UNetBlock(256, 128)
+        self.up2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec2 = UNetBlock(128, 64)
+        self.up1 = nn.ConvTranspose2d(64, 64, kernel_size=2, stride=2)
+        self.dec1 = UNetBlock(128, 64)
+        
+        self.conv_final = nn.Conv2d(64, out_channels, kernel_size=1)
+        
+    def forward(self, x_top, x_middle, x_bottom):
+        # Encoder path
+        x = torch.cat([x_top, x_middle, x_bottom], dim=1)
+        enc1 = self.enc1(x)
+        enc2 = self.enc2(enc1)
+        enc3 = self.enc3(enc2)
+        enc4 = self.enc4(enc3)
+        enc5 = self.enc5(enc4)
+        
+        center = self.center(enc5)
+        
+        # Decoder path
+        dec5 = self.dec5(torch.cat([F.interpolate(enc5, size=self.up5(center).size()[2:], mode='bilinear', align_corners=True), self.up5(center)], 1))
+        dec4 = self.dec4(torch.cat([F.interpolate(enc4, size=self.up4(dec5).size()[2:], mode='bilinear', align_corners=True), self.up4(dec5)], 1))
+        dec3 = self.dec3(torch.cat([F.interpolate(enc3, size=self.up3(dec4).size()[2:], mode='bilinear', align_corners=True), self.up3(dec4)], 1))
+        dec2 = self.dec2(torch.cat([F.interpolate(enc2, size=self.up2(dec3).size()[2:], mode='bilinear', align_corners=True), self.up2(dec3)], 1))
+        dec1 = self.dec1(torch.cat([F.interpolate(enc1, size=self.up1(dec2).size()[2:], mode='bilinear', align_corners=True), self.up1(dec2)], 1))
+
+        final = self.conv_final(dec1)
+        
+        # Ensure the output has the same size as the input (192x192)
+        return F.interpolate(final, size=(192, 192), mode='bilinear', align_corners=True)
 
 
 
+# class UNet2_5D(nn.Module):
+#     def __init__(self, in_channels, out_channels):
+#         super(UNet2_5D, self).__init__()
 
-##################
+#         self.encoder1 = UNetBlock(in_channels, 64)
+#         self.pool1 = nn.MaxPool2d(2)
+#         self.encoder2 = UNetBlock(64, 128)
+#         self.pool2 = nn.MaxPool2d(2)
+#         self.encoder3 = UNetBlock(128, 256)
+#         self.pool3 = nn.MaxPool2d(2)
+#         self.encoder4 = UNetBlock(256, 512)
+#         self.pool4 = nn.MaxPool2d(2)
+#         self.encoder5 = UNetBlock(512, 1024)
+#         self.pool5 = nn.MaxPool2d(2)
 
-# from fastai2.learner import Learner
-# from fastai2.vision.learner import unet_learner, unet_config
-# from fastai2.vision.models import xresnet
+#         self.center = UNetBlock(1024, 2048)  # Removed the AttentionModule
 
-# from metrics_and_losses import mae_loss
+#         self.up5 = nn.ConvTranspose2d(2048, 1024, kernel_size=2, stride=2)
+#         self.decoder5 = UNetBlock(2048, 1024)
+#         self.up4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
+#         self.decoder4 = UNetBlock(1024, 512)
+#         self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+#         self.decoder3 = UNetBlock(512, 256)
+#         self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+#         self.decoder2 = UNetBlock(256, 128)
+#         self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+#         self.decoder1 = UNetBlock(128, 64)
+#         self.conv_final = nn.Conv2d(64, out_channels, kernel_size=1)
 
+#     def forward(self, x_top, x_middle, x_bottom):
+#         x = torch.cat([x_top, x_middle, x_bottom], dim=1)
 
+#         enc1 = self.encoder1(x)
+#         enc2 = self.encoder2(self.pool1(enc1))
+#         enc3 = self.encoder3(self.pool2(enc2))
+#         enc4 = self.encoder4(self.pool3(enc3))
+#         enc5 = self.encoder5(self.pool4(enc4))
 
-# def unet_25d(dls_25d, backbone=None, pretrained=False, n_in=3, n_out=1, wd=0.001, last_cross=True, blur=True,
-#              self_attention=True, metrics=None, output_dir='models', loss_func=None):
-#     """ 2.5D U-Net model """
+#         center = self.center(self.pool5(enc5))
 
-#     if not backbone:
-#         backbone = xresnet.xresnet34
-#     if not loss_func:
-#         loss_func = mae_loss
+#         dec5 = self.decoder5(torch.cat([enc5, self.up5(center)], 1))
+#         dec4 = self.decoder4(torch.cat([enc4, self.up4(dec5)], 1))
+#         dec3 = self.decoder3(torch.cat([enc3, self.up3(dec4)], 1))
+#         dec2 = self.decoder2(torch.cat([enc2, self.up2(dec3)], 1))
+#         dec1 = self.decoder1(torch.cat([enc1, self.up1(dec2)], 1))
+#         final = self.conv_final(dec1)
 
-#     return unet_learner(dls=dls_25d, arch=backbone,loss_func=loss_func, pretrained=pretrained, n_in=n_in,
-#                         n_out=n_out, wd=wd, normalize=False, config=unet_config(last_cross=last_cross,
-#                         blur=blur, self_attention=self_attention, y_range=None), metrics=metrics,
-#                         model_dir=output_dir)
-
-
-# def unet_2d(dls_2d, backbone=None, pretrained=False, n_in=1, n_out=1, wd=0.001, last_cross=True, blur=True,
-#              self_attention=True, metrics=None, output_dir='models', loss_func=None):
-#     """ 2D U-Net model """
-
-#     if not backbone:
-#         backbone = xresnet.xresnet34
-#     if not loss_func:
-#         loss_func = mae_loss
-
-#     return unet_learner(dls=dls_2d, arch=backbone,loss_func=loss_func, pretrained=pretrained, n_in=n_in,
-#                         n_out=n_out, wd=wd, normalize=False, config=unet_config(last_cross=last_cross,
-#                         blur=blur, self_attention=self_attention, y_range=None), metrics=metrics,
-#                         model_dir=output_dir)
-
-
-# class HybridModel(nn.Module):
-#     """ Hybrid 2D/3D U-Net """
-#     def __init__(self, model_2d, model_3d):
-#         super(HybridModel, self).__init__()
-#         self.model_2d = model_2d
-#         self.model_3d = model_3d
-
-#     def forward(self, X):
-#         # Model 2D
-#         X2d_in = X.permute(0, 2, 1, 3, 4)
-#         X2d_out = []
-#         for i in range(X2d_in.shape[0]):
-#             X2d_out.append(self.model_2d(X2d_in[i]).permute(1, 0, 2, 3).unsqueeze(0))
-#         X2d_out = torch.cat(X2d_out)
-
-#         # Model 3D
-#         X3d_in = torch.cat((X, X2d_out), dim=1)
-#         X3d_out = self.model_3d(X3d_in)
-
-#         return X3d_out
-
-#     def predict(self, X, *args, **kwargs):
-#         return self.forward(X)
-
-
-# class HybridModelx3(nn.Module):
-#     """ Hybrid 2.5D/3D U-Net """
-#     def __init__(self, model_25d, model_3d):
-#         super(HybridModelx3, self).__init__()
-#         self.model_25d = model_25d
-#         self.model_3d = model_3d
-
-#     def forward(self, X):
-#         # Model 2.5D
-#         X25d_batches = []
-#         for b in range(X.shape[0]):
-#             X25d_vol = []
-#             for plane in range(X.shape[-3]):
-#                 # start edge
-#                 if plane == 0:
-#                     X25d_in = torch.cat([X[b, 0, :1, :, :], X[b, 0, :2, :, :]], axis=-3)
-#                 # end edge
-#                 elif plane == X.shape[-3] - 1:
-#                     X25d_in = torch.cat([X[b, 0, -1:, :, :], X[b, 0, -2:, :, :]], axis=-3)
-#                 else:
-#                     X25d_in = X[b, 0, plane - 1:plane + 2, :, :]
-
-#                 X25d_vol.append(self.model_25d(X25d_in.unsqueeze(0)))
-#             X25d_batches.append(torch.cat(X25d_vol).unsqueeze(0))
-#         X25d_out = torch.cat(X25d_batches).permute(0, 2, 1, 3, 4)
-
-#         # Model 3D
-#         X3d_in = torch.cat((X, X25d_out), dim=1)
-#         X3d_out = self.model_3d(X3d_in)
-
-#         return X3d_out
-
-#     def predict(self, X, *args, **kwargs):
-#         return self.forward(X)
+#         return final
 
 

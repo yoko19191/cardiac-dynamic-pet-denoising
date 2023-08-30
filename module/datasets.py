@@ -289,7 +289,8 @@ class NACDataset(Dataset):
         top_slice = self.data_tensor[patient_idx, time_idx, :, depth_idx-1, :, :]
         middle_slice = self.data_tensor[patient_idx, time_idx, :, depth_idx, :, :] 
         bottom_slice = self.data_tensor[patient_idx, time_idx, :, depth_idx+1, :, :]
-        middle_target = self.data_tensor[patient_idx, time_idx, :, depth_idx, :, :].clone() # noisy middle slice as clean 
+        #middle_target = self.data_tensor[patient_idx, time_idx, :, depth_idx, :, :].clone() # noisy middle slice as clean 
+        middle_target = middle_slice
         
         return top_slice, middle_slice, bottom_slice, middle_target
 
