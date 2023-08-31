@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 import torch 
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 
 def load_4d_dicom(patient_path):
     """
@@ -290,7 +291,7 @@ class NACDataset(Dataset):
     #     std_estimate = torch.sqrt(lambda_estimate)
     #     return std_estimate
     
-    def anscombe_estimate(image_tensor, window_size=7):
+    def anscombe_estimate(self, image_tensor, window_size=7):
         def anscombe(x):
             return 2 * torch.sqrt(x + 3 / 8)
 
@@ -329,15 +330,16 @@ class NACDataset(Dataset):
         if self.mode == 'train':
             # Concatenate slices to estimate noise
             concatenated_slices = torch.cat((top_slice, middle_slice, bottom_slice), dim=0)
-            noise_shape = middle_slice.shape
+            #noise_shape = middle_slice.shape
             # Estimate noise std based on noise_type
             if self.noise_type == 'gaussian':
                 estimate_std = self.mad_estimate(concatenated_slices)
-                simulated_noise = torch.normal(mean=0., std=estimate_std, size=noise_shape).to(middle_slice.device)  # Move noise to the same device
+                simulated_noise = torch.normal(mean=0., std=estimate_std, size=middle_slice.shape).to(middle_slice.device)  # Move noise to the same device
             elif self.noise_type == 'poisson':
                 # estimate_std = self.mae_estimate(concatenated_slices)
-                estimate_std = anscombe_estimate(concatenated_slices)
+                estimate_std = self.anscombe_estimate(concatenated_slices)
                 simulated_noise = torch.poisson(estimate_std * torch.ones_like(middle_slice)).to(middle_slice.device) - estimate_std
+                simulated_noise = simulated_noise * 0.1
             else:
                 raise ValueError("Invalid noise_type. Choose either 'gaussian' or 'poisson'.")
             
