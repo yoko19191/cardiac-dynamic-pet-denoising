@@ -20,45 +20,94 @@ reference :
 
 class CNN(nn.Module):
     """
-        simple 2 layer CNN
+        A CNN with a variable number of layers
     """
-    def __init__(self ,n_chan ,chan_embed=48):
+    def __init__(self, n_chan, chan_embed=48, num_hidden_layers=2):
         super(CNN, self).__init__()
-
+        
         self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        self.conv1 = nn.Conv2d(n_chan ,chan_embed ,3 ,padding=1)
-        self.conv2 = nn.Conv2d(chan_embed, chan_embed, 3, padding = 1)
-        self.conv3 = nn.Conv2d(chan_embed, n_chan, 1)
+        
+        # Input layer
+        self.input_layer = nn.Conv2d(n_chan, chan_embed, 3, padding=1)
+        
+        # Hidden layers
+        self.hidden_layers = nn.ModuleList()
+        for _ in range(num_hidden_layers):
+            self.hidden_layers.append(nn.Conv2d(chan_embed, chan_embed, 3, padding=1))
+        
+        # Output layer
+        self.output_layer = nn.Conv2d(chan_embed, n_chan, 1)
+
     def forward(self, x):
-        x = self.act(self.conv1(x))
-        x = self.act(self.conv2(x))
-        x = self.conv3(x)
+        x = self.act(self.input_layer(x))
+        
+        # Pass through hidden layers
+        for layer in self.hidden_layers:
+            x = self.act(layer(x))
+        
+        x = self.output_layer(x)
         return x
 
 
 
 class DnCNN(nn.Module):
     """
-        Implementation of 2D DnCNN
+    Implementation of 2D DnCNN
     """
-    def __init__(self, channels, num_of_layers=17):
+    def __init__(self, in_channels=1, out_channels=1, num_layers=17, features=64):
         super(DnCNN, self).__init__()
-        kernel_size = 3
-        padding = 1
-        features = 64
+
         layers = []
-        layers.append(nn.Conv2d(in_channels=channels, out_channels=features, kernel_size=kernel_size, padding=padding, bias=False))
+        
+        layers.append(nn.Conv2d(in_channels, features, kernel_size=3, padding=1, stride=1))
         layers.append(nn.ReLU(inplace=True))
-        for _ in range(num_of_layers-2):
-            layers.append(nn.Conv2d(in_channels=features, out_channels=features, kernel_size=kernel_size, padding=padding, bias=False))
+        
+        for _ in range(num_layers - 2):
+            layers.append(nn.Conv2d(features, features, kernel_size=3, padding=1, stride=1))
             layers.append(nn.BatchNorm2d(features))
             layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.Conv2d(in_channels=features, out_channels=channels, kernel_size=kernel_size, padding=padding, bias=False))
+
+        layers.append(nn.Conv2d(features, out_channels, kernel_size=3, padding=1, stride=1))
+
         self.dncnn = nn.Sequential(*layers)
+
     def forward(self, x):
         out = self.dncnn(x)
         return out
 
+
+
+class UNet(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(UNet, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.middle = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.decoder = nn.Sequential(
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 64, kernel_size=2, stride=2),  # Up-sampling to [B, 64, 96, 96]
+            nn.Conv2d(64, out_channels, kernel_size=3, padding=1) # Output layer
+        )
+
+    def forward(self, x):
+        x1 = self.encoder(x)
+        x2 = self.middle(x1)
+        x3 = self.decoder(x2)
+        return x3
 
 
 class AttentionModule(nn.Module):
