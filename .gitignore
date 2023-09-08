@@ -1,5 +1,6 @@
-# pycharm
+# IDE cache
 .idea
+.vscode
 
 # local enviroment
 .env
