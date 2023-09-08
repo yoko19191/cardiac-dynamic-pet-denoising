@@ -111,6 +111,33 @@ def save_4d_dicom(dicom_folder, ndarray_4d, output_folder):
     print(f"Saved {total_files} denoised DICOM files.")
 
 
+
+def split_data(data_array):
+    """split ndarray into train, test, vali arrays
+
+    Args:
+        data_array (numpy.ndarray): The input data array.
+
+    Returns:
+        numpy.ndarray, numpy.ndarray, numpy.ndarray: Train, Validation, Test arrays.
+    """
+    test_array = data_array[0:1]
+    rest_array = data_array[1:]
+
+    total_samples = rest_array.shape[0]
+    
+    train_ration = 0.8
+    train_length = int(train_ration * total_samples)
+    val_length = total_samples - train_length
+    
+    indices = np.arange(total_samples)
+    np.random.shuffle(indices)
+
+    train_array = rest_array[indices[:train_length]]
+    val_array = rest_array[indices[train_length:]]
+
+    return train_array, val_array, test_array
+
 # class Mask2_5Dataset(Dataset):
 #     def __init__(self, noisy_data, apply_mask=True, n_mask = 1):
 #         self.noisy_data = noisy_data
@@ -267,91 +294,7 @@ class MaskDataset(Dataset):
         
         return top_slice, mask_middle, bottom_slice, middle_slice
     
-    
-class NACDataset(Dataset):
-    def __init__(self, data_tensor, mode='train', noise_type='gaussian'):
-        self.data_tensor = data_tensor
-        self.mode = mode
-        self.noise_type = noise_type  # Can be 'gaussian' or 'poisson'
-        assert len(data_tensor.shape) == 6, "noisy_tensor should have 6 dimensions (patient, time, channel, depth, height, width)"
-        assert self.data_tensor.size(3) >= 3, "Depth should be at least 3 for 2.5D slices."
         
-        self.p = data_tensor.shape[0]  # number of patient
-        self.t = data_tensor.shape[1]  # number of time frame
-        self.d = data_tensor.shape[3] - 2  # number of continuous slices
-
-    def mad_estimate(self, image_tensor):
-        median = torch.median(image_tensor)
-        mad = torch.median(torch.abs(image_tensor - median))
-        noise_level = mad / 0.6745
-        return torch.mean(noise_level)
-
-    # def mae_estimate(self, image_tensor):
-    #     lambda_estimate = torch.mean(image_tensor)
-    #     std_estimate = torch.sqrt(lambda_estimate)
-    #     return std_estimate
-    
-    def anscombe_estimate(self, image_tensor, window_size=7):
-        def anscombe(x):
-            return 2 * torch.sqrt(x + 3 / 8)
-
-        def inv_anscombe(y):
-            return (y / 2) ** 2 - 3 / 8
-        
-        # Reshape tensor to match expected input shape for F.avg_pool2d
-        c, h, w = image_tensor.shape
-        reshaped_tensor = image_tensor.view(c, 1, h, w)
-        
-        # Calculate local mean using average pooling
-        local_mean = F.avg_pool2d(reshaped_tensor, window_size, stride=1, padding=window_size // 2)
-        
-        # Calculate local variance
-        local_var = F.avg_pool2d(reshaped_tensor ** 2, window_size, stride=1, padding=window_size // 2) - local_mean ** 2
-        
-        # Calculate average std
-        noise_std = torch.sqrt(F.relu(local_var)).mean()
-        
-        return noise_std
-
-    def __len__(self):
-        return self.p * self.t * self.d  # number of continuous three slices
-
-    def __getitem__(self, idx):
-        patient_idx = idx // (self.t * self.d)
-        time_idx = (idx % (self.t * self.d)) // self.d
-        depth_idx = idx % self.d + 1  # We add 1 to start from the second slice (for the middle slice)
-
-        # Extract the slices
-        top_slice = self.data_tensor[patient_idx, time_idx, :, depth_idx-1, :, :]
-        middle_slice = self.data_tensor[patient_idx, time_idx, :, depth_idx, :, :]
-        bottom_slice = self.data_tensor[patient_idx, time_idx, :, depth_idx+1, :, :]
-        middle_target = self.data_tensor[patient_idx, time_idx, :, depth_idx, :, :].clone()  # noisy middle slice as clean
-
-        if self.mode == 'train':
-            # Concatenate slices to estimate noise
-            concatenated_slices = torch.cat((top_slice, middle_slice, bottom_slice), dim=0)
-            #noise_shape = middle_slice.shape
-            # Estimate noise std based on noise_type
-            if self.noise_type == 'gaussian':
-                estimate_std = self.mad_estimate(concatenated_slices)
-                simulated_noise = torch.normal(mean=0., std=estimate_std, size=middle_slice.shape).to(middle_slice.device)  # Move noise to the same device
-            elif self.noise_type == 'poisson':
-                # estimate_std = self.mae_estimate(concatenated_slices)
-                estimate_std = self.anscombe_estimate(concatenated_slices)
-                simulated_noise = torch.poisson(estimate_std * torch.ones_like(middle_slice)).to(middle_slice.device) - estimate_std
-                simulated_noise = simulated_noise * 0.1
-            else:
-                raise ValueError("Invalid noise_type. Choose either 'gaussian' or 'poisson'.")
-            
-            # Add simulated noise
-            top_slice += simulated_noise
-            middle_slice += simulated_noise
-            bottom_slice += simulated_noise
-
-        return top_slice, middle_slice, bottom_slice, middle_target
-
-        
-
 class NACDataset(Dataset):
     def __init__(self, data_tensor, mode='train', noise_type='gaussian'):
         self.data_tensor = data_tensor
@@ -461,11 +404,9 @@ class Nb2NbDataset(Dataset):
 
         # Extract the slices
         top_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx-1, :, :]
-        middle_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :].clone()  # We use clone() to avoid in-place modifications
+        middle_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :]  # We use clone() to avoid in-place modifications
         bottom_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx+1, :, :]
-        
-    
-        
+            
         
         return top_slice, mask_middle, bottom_slice, middle_slice
     
