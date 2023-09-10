@@ -244,9 +244,74 @@ class UNet2_5D(nn.Module):
         final = self.conv_final(dec1)
         return final
 
-    
 
-###### ResNet-34 U-Net #########
+###### 2D U-Net #########
+class UNet2D(nn.Module):
+    """
+    2D UNet architecture.
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels (usually number of classes).
+    """
+    def __init__(self, in_channels, out_channels):
+        super(UNet2D, self).__init__()
+
+        self.encoder1 = UNetBlock(in_channels, 64)
+        self.pool1 = nn.MaxPool2d(2)
+        self.encoder2 = UNetBlock(64, 128)
+        self.pool2 = nn.MaxPool2d(2)
+        self.encoder3 = UNetBlock(128, 256)
+        self.pool3 = nn.MaxPool2d(2)
+        self.encoder4 = UNetBlock(256, 512)
+        self.pool4 = nn.MaxPool2d(2)
+        self.encoder5 = UNetBlock(512, 1024)
+        self.pool5 = nn.MaxPool2d(2)
+
+        self.center = nn.Sequential(
+            UNetBlock(1024, 2048),
+            AttentionModule(2048, 2048)
+        )
+
+        self.up5 = nn.ConvTranspose2d(2048, 1024, kernel_size=2, stride=2)
+        self.decoder5 = UNetBlock(2048, 1024)
+        self.up4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
+        self.decoder4 = UNetBlock(1024, 512)
+        self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.decoder3 = UNetBlock(512, 256)
+        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.decoder2 = UNetBlock(256, 128)
+        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.decoder1 = UNetBlock(128, 64)
+        self.conv_final = nn.Conv2d(64, out_channels, kernel_size=1)
+
+    def forward(self, x_middle):
+        """
+        Forward pass for the 2D UNet.
+
+        Args:
+            x_middle (torch.Tensor): Input tensor (batch_size, in_channels, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor (batch_size, out_channels, height, width).
+        """
+        enc1 = self.encoder1(x_middle)
+        enc2 = self.encoder2(self.pool1(enc1))
+        enc3 = self.encoder3(self.pool2(enc2))
+        enc4 = self.encoder4(self.pool3(enc3))
+        enc5 = self.encoder5(self.pool4(enc4))
+        center = self.center(self.pool5(enc5))
+        dec5 = self.decoder5(torch.cat([enc5, self.up5(center)], 1))
+        dec4 = self.decoder4(torch.cat([enc4, self.up4(dec5)], 1))
+        dec3 = self.decoder3(torch.cat([enc3, self.up3(dec4)], 1))
+        dec2 = self.decoder2(torch.cat([enc2, self.up2(dec3)], 1))
+        dec1 = self.decoder1(torch.cat([enc1, self.up1(dec2)], 1))
+        final = self.conv_final(dec1)
+        return final
+
+
+
+###### ResNet-34 2.5D U-Net #########
 
 
 class ResNet34_UNet(nn.Module):

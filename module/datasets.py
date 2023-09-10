@@ -378,37 +378,68 @@ class NACDataset(Dataset):
         return top_slice, middle_slice, bottom_slice, middle_target
     
     
-    
-class Nb2NbDataset(Dataset):
-    """ 
-    Dataset for Neighbour2Neighbor
-    Args:
-    - data_tensor : the input tensor with dimensions(patient, time, channel, depth, height, width)
-    """
-    def __init__(self, data_tensor, num_mask=1):
-        self.data_tensor = data_tensor
-        assert len(data_tensor.shape) == 6, "noisy_tensor should have 6 dimensions (patient, time, channel, depth, height, width)"
-        assert self.data_tensor.size(3) >= 3, "Depth should be at least 3 for 2.5D slices."
         
-        self.p = data_tensor.shape[0] # number of patiences
-        self.t = data_tensor.shape[1] # number of time frame
-        self.d = data_tensor.shape[3] - 2 # number of contines slices
+class Nb2Nb2D_Dataset(Dataset):
+    def __init__(self, data, k=2):
+        """
+        Args:
+            data (torch.Tensor): A tensor of shape [patient, time, channel, depth, height, width].
+            k (int): Size of the cell for sub-sampling in random_neighbor_subsample.
+        """
+        assert len(data.shape) == 6, "The input data should have 6 dimensions [patient, time, channel, depth, height, width]"
         
+        self.data = data
+        self.k = k
+
+        # Pre-compute the total number of slices we have across all patients and times
+        self.num_slices = data.shape[0] * data.shape[1] * data.shape[3]
+
     def __len__(self):
-        return self.p * self.t * self.d # number of continues three slices
+        return self.num_slices
+
+    
+    def random_neighbor_subsample(self, tensor, k):
+        """
+        Perform random neighbor sub-sampling on a tensor of shape CxHxW.
+        
+        Args:
+        - tensor (torch.Tensor): Input tensor of shape CxHxW.
+        - k (int): Size of the cell for sub-sampling.
+        
+        Returns:
+        - g1, g2 (torch.Tensor, torch.Tensor): Two sub-sampled tensors, each of shape Cx(H//k)x(W//k).
+        """
+        # Check tensor dimensions
+        C, H, W = tensor.shape
+        
+        # Initialize sub-sampled tensors
+        g1 = torch.zeros((C, H//k, W//k))
+        g2 = torch.zeros((C, H//k, W//k))
+        
+        for i in range(0, H, k):
+            for j in range(0, W, k):
+                # Randomly select one of the kxk neighbors for g1 and another for g2
+                neighbors = [(i+x, j+y) for x in range(k) for y in range(k)]
+                idx1, idx2 = torch.randperm(k*k)[:2]  # Randomly select two indices
+                g1[:, i//k, j//k] = tensor[:, neighbors[idx1][0], neighbors[idx1][1]]
+                g2[:, i//k, j//k] = tensor[:, neighbors[idx2][0], neighbors[idx2][1]]
+        
+        return g1, g2
     
     def __getitem__(self, idx):
-        patience_idx = idx // (self.t * self.d)
-        time_idx = (idx % (self.t * self.d)) // self.d
-        depth_idx = idx % self.d + 1  # We add 1 to start from the second slice (for the middle slice)
-
-        # Extract the slices
-        top_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx-1, :, :]
-        middle_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :]  # We use clone() to avoid in-place modifications
-        bottom_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx+1, :, :]
-            
+        # Given an idx, find out which patient, time, and depth this corresponds to
+        depth_idx = idx % self.data.shape[3]
+        time_idx = (idx // self.data.shape[3]) % self.data.shape[1]
+        patient_idx = idx // (self.data.shape[3] * self.data.shape[1])
         
-        return top_slice, mask_middle, bottom_slice, middle_slice
+        # Extract the slice
+        slice_2d = self.data[patient_idx, time_idx, :, depth_idx, :, :]
+        
+        # Get the sub-sampled tensors g1 and g2
+        g1, g2 = self.random_neighbor_subsample(slice_2d, self.k)
+
+        return slice_2d, g1, g2
+
     
-    
+
     
