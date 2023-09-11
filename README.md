@@ -18,10 +18,10 @@ pip install -r requirements.txt
 ## Compared methods
 
 - [X] Block-Matching and 4D filtering
-- [ ] Noise-As-Clean(NAC)
+- [X] Noise-As-Clean(NAC)
 - [X] Noise2Void(N2V)
 - [ ] Neighbor2Neighbor(Nb2Nb)
-- [ ] Zero-shot Noise2Noise(ZS-N2N)
+- [X] Zero-shot Noise2Noise(ZS-N2N)
 - [ ] Proposed ZS-N2N variant
 
 ## Metrics
