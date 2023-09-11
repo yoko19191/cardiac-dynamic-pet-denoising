@@ -390,6 +390,9 @@ class Nb2Nb2D_Dataset(Dataset):
         
         self.data = data
         self.k = k
+        self.p = data_tensor.shape[0]  # number of patient
+        self.t = data_tensor.shape[1]  # number of time frame
+        self.d = data_tensor.shape[3]  # number of continuous slices
 
         # Pre-compute the total number of slices we have across all patients and times
         self.num_slices = data.shape[0] * data.shape[1] * data.shape[3]
