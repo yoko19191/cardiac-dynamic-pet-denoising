@@ -395,7 +395,7 @@ class Nb2Nb2D_Dataset(Dataset):
         self.d = data_tensor.shape[3]  # number of continuous slices
 
         # Pre-compute the total number of slices we have across all patients and times
-        self.num_slices = data.shape[0] * data.shape[1] * data.shape[3]
+        self.num_slices = data_tensor.shape[0] * data_tensor.shape[1] * data_tensor.shape[3]
 
     def __len__(self):
         return self.num_slices
