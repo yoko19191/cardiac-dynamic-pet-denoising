@@ -380,15 +380,15 @@ class NACDataset(Dataset):
     
         
 class Nb2Nb2D_Dataset(Dataset):
-    def __init__(self, data, k=2):
+    def __init__(self, data_tensor, k=2):
         """
         Args:
             data (torch.Tensor): A tensor of shape [patient, time, channel, depth, height, width].
             k (int): Size of the cell for sub-sampling in random_neighbor_subsample.
         """
-        assert len(data.shape) == 6, "The input data should have 6 dimensions [patient, time, channel, depth, height, width]"
+        assert len(data_tensor.shape) == 6, "The input data should have 6 dimensions [patient, time, channel, depth, height, width]"
         
-        self.data = data
+        self.data_tensor = data_tensor
         self.k = k
         self.p = data_tensor.shape[0]  # number of patient
         self.t = data_tensor.shape[1]  # number of time frame
@@ -453,12 +453,12 @@ class Nb2Nb2D_Dataset(Dataset):
     
     def __getitem__(self, idx):
         # Given an idx, find out which patient, time, and depth this corresponds to
-        depth_idx = idx % self.data.shape[3]
-        time_idx = (idx // self.data.shape[3]) % self.data.shape[1]
-        patient_idx = idx // (self.data.shape[3] * self.data.shape[1])
+        depth_idx = idx % self.data_tensor.shape[3]
+        time_idx = (idx // self.data_tensor.shape[3]) % self.data_tensor.shape[1]
+        patient_idx = idx // (self.data_tensor.shape[3] * self.data_tensor.shape[1])
         
         # Extract the slice
-        slice_2d = self.data[patient_idx, time_idx, :, depth_idx, :, :]
+        slice_2d = self.data_tensor[patient_idx, time_idx, :, depth_idx, :, :]
         
         # Get the sub-sampled tensors g1 and g2
         g1, g2 = self.random_neighbor_subsample(slice_2d, self.k)
