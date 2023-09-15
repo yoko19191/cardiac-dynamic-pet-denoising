@@ -20,9 +20,10 @@ pip install -r requirements.txt
 - [X] Block-Matching and 4D filtering
 - [X] Noise-As-Clean(NAC)
 - [X] Noise2Void(N2V)
-- [ ] Neighbor2Neighbor(Nb2Nb)
+- [X] Neighbor2Neighbor(Nb2Nb)
 - [X] Zero-shot Noise2Noise(ZS-N2N)
-- [ ] Proposed ZS-N2N variant
+- [ ] Neighbor2Neighbor(Nb2Nb) (extend to 2.5D)
+- [ ] Zero-shot Noise2Noise(ZS-N2N) (extend to 2.5D)
 
 ## Metrics
 
