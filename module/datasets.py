@@ -382,9 +382,11 @@ class NACDataset(Dataset):
 class Nb2Nb2D_Dataset(Dataset):
     def __init__(self, data_tensor, k=2):
         """
+        Dataset for Neighbour2Neighbour methods on 2.5D network
+        
         Args:
-            data (torch.Tensor): A tensor of shape [patient, time, channel, depth, height, width].
-            k (int): Size of the cell for sub-sampling in random_neighbor_subsample.
+            data_tensor (torch.Tensor): A tensor of shape [patient, time, channel, depth, height, width].
+            k (int): Size of the cell for sub-sampling in random_neighbor_subsample. quote, "In the paper, we use gamma=2 for synthetic experiments, and 1 for real-world experiments"
         """
         assert len(data_tensor.shape) == 6, "The input data should have 6 dimensions [patient, time, channel, depth, height, width]"
         
@@ -468,3 +470,65 @@ class Nb2Nb2D_Dataset(Dataset):
     
 
     
+class Nb2NbDataset(Dataset):
+    """ 
+    Dataset for Neighbour2Neighbour methods on 2.5D network
+    Args:
+    - data_tensor(torch.Tensor) : the input tensor with dimensions(patient, time, channel, depth, height, width)
+    - k(int): Size of the cell for sub-sampling in random_neighbor_subsample. quote, "In the paper, we use gamma=2 for synthetic experiments, and 1 for real-world experiments"
+    """
+    def __init__(self, data_tensor, k=2):
+    
+        assert len(data_tensor.shape) == 6, "The input data should have 6 dimensions [patient, time, channel, depth, height, width]"
+        assert data_tensor.size(3) >= 3, "Depth should be at least 3 for 2.5D slices."
+        
+        self.data_tensor = data_tensor
+        self.k = k
+        self.p = data_tensor.shape[0]  # number of patient
+        self.t = data_tensor.shape[1]  # number of time frame
+        self.d = data_tensor.shape[3] -2  # number of continuous slices
+
+        
+    def __len__(self):
+        return self.p * self.t * self.d # number of continues three slices
+    
+    
+    def random_neighbor_subsample(self, tensor, k):
+        """
+        Perform random neighbor sub-sampling on a tensor of shape CxHxW.
+        
+        Args:
+        - tensor (torch.Tensor): Input tensor of shape CxHxW.
+        - k (int): Size of the cell for sub-sampling.
+        
+        Returns:
+        - g1, g2 (torch.Tensor, torch.Tensor): Two sub-sampled tensors, each of shape Cx(H//k)x(W//k).
+        """
+        C, H, W = tensor.shape
+        unfolded = tensor.unfold(1, k, k).unfold(2, k, k)
+        unfolded = unfolded.contiguous().view(C, H//k, W//k, k*k)
+        
+        idx1, idx2 = torch.randperm(k*k)[:2].to(tensor.device)
+        
+        g1 = unfolded[..., idx1].squeeze(-1)
+        g2 = unfolded[..., idx2].squeeze(-1)
+        
+        return g1, g2
+    
+    def __getitem__(self, idx):
+        patience_idx = idx // (self.t * self.d)
+        time_idx = (idx % (self.t * self.d)) // self.d
+        depth_idx = idx % self.d + 1  # We add 1 to start from the second slice (for the middle slice)
+
+        # Extract the slices
+        top_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx-1, :, :]
+        middle_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx, :, :]
+        bottom_slice = self.data_tensor[patience_idx, time_idx, :, depth_idx+1, :, :]
+        
+        #subsampling three slices
+        top_g1, top_g2 = self.random_neighbor_subsample(top_slice, self.k)
+        middle_g1, middle_g2 = self.random_neighbor_subsample(middle_slice, self.k)
+        bottom_g1, bottom_g2 = self.random_neighbor_subsample(bottom_slice, self.k)
+        
+        
+        return (top_slice, top_g1, top_g2), (middle_slice, middle_g1, middle_g2), (bottom_slice, bottom_g1, bottom_g2)
